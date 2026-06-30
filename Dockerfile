@@ -1,5 +1,5 @@
 FROM node:22-alpine
-RUN apk add --no-cache openssh-client
+RUN apk add --no-cache openssh-client docker-cli
 WORKDIR /app
 COPY package.json server.mjs ./
 EXPOSE 8090

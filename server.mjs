@@ -43,11 +43,13 @@ const SERVICES = {
     remote: true,
     cmd: 'journalctl -u music-bot -u music-web -f -n 500 --no-pager --output=short-iso',
   },
-  // Logs del worker de música (este mismo servidor CX33)
+  // Logs del worker de música (contenedor Docker en CX33, via socket)
   'worker': {
     label: 'Worker CX33',
     remote: false,
-    cmd: ['journalctl', '-f', '-n', '200', '--no-pager', '--output=short-iso'],
+    // shell: busca el contenedor por label de Coolify y sigue sus logs
+    cmd: ['sh', '-c',
+      "docker logs -f --tail 200 $(docker ps -q --filter 'label=coolify.applicationId=v132p5q9aszr0dsmda22w4zn') 2>&1 || echo '[No se encontró el contenedor del worker]'"],
   },
 }
 

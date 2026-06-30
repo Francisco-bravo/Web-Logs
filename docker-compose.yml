@@ -1,0 +1,17 @@
+services:
+  weblogs:
+    build: .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - PORT=${PORT:-8090}
+      - LOGS_TOKEN=${LOGS_TOKEN:-changeme}
+      - ORACLE_HOST=${ORACLE_HOST:-146.181.44.27}
+      - ORACLE_USER=${ORACLE_USER:-ubuntu}
+      - ORACLE_SSH_KEY_B64=${ORACLE_SSH_KEY_B64:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
