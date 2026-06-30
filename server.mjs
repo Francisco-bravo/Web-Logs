@@ -14,6 +14,10 @@ const ORACLE_USER = process.env.ORACLE_USER || 'ubuntu'
 // La clave SSH en base64: base64(contenido del archivo .pem)
 const ORACLE_SSH_KEY_B64 = process.env.ORACLE_SSH_KEY_B64 || ''
 
+// Worker de música (CX33) — llama a su propio endpoint /stream-logs
+const WORKER_URL = process.env.WORKER_URL || 'https://music.aronne.dev'
+const WORKER_TOKEN = process.env.WORKER_TOKEN || ''
+
 // Escribe la clave SSH en /tmp y devuelve la ruta. Limpiar después de usar.
 function writeSshKey() {
   if (!ORACLE_SSH_KEY_B64) return null
@@ -43,15 +47,10 @@ const SERVICES = {
     remote: true,
     cmd: 'journalctl -u music-bot -u music-web -f -n 500 --no-pager --output=short-iso',
   },
-  // Logs del worker de música (contenedor Docker en CX33, via socket)
+  // Logs del worker de música — consume su endpoint SSE /stream-logs
   'worker': {
     label: 'Worker CX33',
-    remote: false,
-    dockerSocket: true,
-    // Requiere que /var/run/docker.sock esté montado en este contenedor.
-    // En Coolify: Storage → Add → Bind Mount → /var/run/docker.sock
-    cmd: ['sh', '-c',
-      "docker logs -f --tail 200 $(docker ps -q --filter 'label=coolify.applicationId=v132p5q9aszr0dsmda22w4zn' 2>/dev/null) 2>&1"],
+    workerHttp: true,
   },
 }
 
@@ -261,15 +260,37 @@ const server = http.createServer((req, res) => {
       return
     }
 
-    if (cfg.dockerSocket) {
-      if (!existsSync('/var/run/docker.sock')) {
-        res.write('data: [Docker socket no disponible en este contenedor]\n\n')
-        res.write('data: [Para activarlo: Coolify → app weblogs → Storage → Add Bind Mount]\n\n')
-        res.write('data: [  Host path: /var/run/docker.sock]\n\n')
-        res.write('data: [  Container path: /var/run/docker.sock]\n\n')
+    if (cfg.workerHttp) {
+      if (!WORKER_TOKEN) {
+        res.write('data: [Error: WORKER_TOKEN no configurado en Coolify]\n\n')
         res.end()
         return
       }
+      const upstreamUrl = `${WORKER_URL}/stream-logs`
+      let upstream
+      try {
+        const mod = upstreamUrl.startsWith('https') ? await import('node:https') : await import('node:http')
+        const parsed = new URL(upstreamUrl)
+        upstream = mod.default.request({
+          hostname: parsed.hostname, port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+          path: parsed.pathname, method: 'GET',
+          headers: { Authorization: `Bearer ${WORKER_TOKEN}`, Accept: 'text/event-stream' },
+        }, upRes => {
+          upRes.setEncoding('utf8')
+          upRes.on('data', chunk => { try { res.write(chunk) } catch {} })
+          upRes.on('end', () => { try { res.end() } catch {} })
+        })
+        upstream.on('error', err => {
+          res.write(`data: [Error conectando al worker: ${err.message}]\n\n`)
+          try { res.end() } catch {}
+        })
+        upstream.end()
+      } catch (err) {
+        res.write(`data: [Error: ${err.message}]\n\n`)
+        res.end()
+      }
+      req.on('close', () => { try { upstream?.destroy() } catch {} })
+      return
     }
 
     const keyPath = cfg.remote ? writeSshKey() : null
