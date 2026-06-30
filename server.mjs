@@ -47,9 +47,11 @@ const SERVICES = {
   'worker': {
     label: 'Worker CX33',
     remote: false,
-    // shell: busca el contenedor por label de Coolify y sigue sus logs
+    dockerSocket: true,
+    // Requiere que /var/run/docker.sock esté montado en este contenedor.
+    // En Coolify: Storage → Add → Bind Mount → /var/run/docker.sock
     cmd: ['sh', '-c',
-      "docker logs -f --tail 200 $(docker ps -q --filter 'label=coolify.applicationId=v132p5q9aszr0dsmda22w4zn') 2>&1 || echo '[No se encontró el contenedor del worker]'"],
+      "docker logs -f --tail 200 $(docker ps -q --filter 'label=coolify.applicationId=v132p5q9aszr0dsmda22w4zn' 2>/dev/null) 2>&1"],
   },
 }
 
@@ -257,6 +259,17 @@ const server = http.createServer((req, res) => {
       res.write('data: [Error: ORACLE_SSH_KEY_B64 no configurado en Coolify]\n\n')
       res.end()
       return
+    }
+
+    if (cfg.dockerSocket) {
+      if (!existsSync('/var/run/docker.sock')) {
+        res.write('data: [Docker socket no disponible en este contenedor]\n\n')
+        res.write('data: [Para activarlo: Coolify → app weblogs → Storage → Add Bind Mount]\n\n')
+        res.write('data: [  Host path: /var/run/docker.sock]\n\n')
+        res.write('data: [  Container path: /var/run/docker.sock]\n\n')
+        res.end()
+        return
+      }
     }
 
     const keyPath = cfg.remote ? writeSshKey() : null
