@@ -1,4 +1,5 @@
 import http from 'node:http'
+import https from 'node:https'
 import { spawn } from 'node:child_process'
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -269,9 +270,9 @@ const server = http.createServer((req, res) => {
       const upstreamUrl = `${WORKER_URL}/stream-logs`
       let upstream
       try {
-        const mod = upstreamUrl.startsWith('https') ? await import('node:https') : await import('node:http')
         const parsed = new URL(upstreamUrl)
-        upstream = mod.default.request({
+        const mod = parsed.protocol === 'https:' ? https : http
+        upstream = mod.request({
           hostname: parsed.hostname, port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
           path: parsed.pathname, method: 'GET',
           headers: { Authorization: `Bearer ${WORKER_TOKEN}`, Accept: 'text/event-stream' },
