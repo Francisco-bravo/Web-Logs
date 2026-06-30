@@ -9,9 +9,31 @@ services:
       - ORACLE_HOST=${ORACLE_HOST:-146.181.44.27}
       - ORACLE_USER=${ORACLE_USER:-ubuntu}
       - ORACLE_SSH_KEY_B64=${ORACLE_SSH_KEY_B64:-}
+    networks:
+      - coolify
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-0-lle06zb1u4v6qppof1bbimbf.entryPoints=http
+      - traefik.http.routers.http-0-lle06zb1u4v6qppof1bbimbf.middlewares=redirect-to-https
+      - "traefik.http.routers.http-0-lle06zb1u4v6qppof1bbimbf.rule=Host(`logs.aronne.dev`) && PathPrefix(`/`)"
+      - traefik.http.routers.http-0-lle06zb1u4v6qppof1bbimbf.service=http-0-lle06zb1u4v6qppof1bbimbf
+      - traefik.http.routers.https-0-lle06zb1u4v6qppof1bbimbf.entryPoints=https
+      - traefik.http.routers.https-0-lle06zb1u4v6qppof1bbimbf.middlewares=gzip
+      - "traefik.http.routers.https-0-lle06zb1u4v6qppof1bbimbf.rule=Host(`logs.aronne.dev`) && PathPrefix(`/`)"
+      - traefik.http.routers.https-0-lle06zb1u4v6qppof1bbimbf.service=https-0-lle06zb1u4v6qppof1bbimbf
+      - traefik.http.routers.https-0-lle06zb1u4v6qppof1bbimbf.tls.certresolver=letsencrypt
+      - traefik.http.routers.https-0-lle06zb1u4v6qppof1bbimbf.tls=true
+      - traefik.http.services.http-0-lle06zb1u4v6qppof1bbimbf.loadbalancer.server.port=8090
+      - traefik.http.services.https-0-lle06zb1u4v6qppof1bbimbf.loadbalancer.server.port=8090
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8090/health"]
       interval: 30s
       timeout: 5s
       retries: 3
     restart: unless-stopped
+
+networks:
+  coolify:
+    external: true
